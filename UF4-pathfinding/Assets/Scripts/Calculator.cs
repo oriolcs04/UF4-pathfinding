@@ -16,4 +16,5 @@ public static class Calculator
     {
         return Vector3.Distance(GetPositionFromMatrix(obj), GetPositionFromMatrix(point));
     }
+    //funcion calculo todos los nodos hasta el actual
 }

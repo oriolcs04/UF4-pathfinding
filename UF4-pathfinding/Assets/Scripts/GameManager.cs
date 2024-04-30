@@ -1,12 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using static UnityEngine.RuleTile.TilingRuleOutput;
 
 public class GameManager : MonoBehaviour
 {
-    public GameObject token1, token2, token3;
+    public GameObject token1, token2, token3, token4;
     private int[,] GameMatrix; //0 not chosen, 1 player, 2 enemy
     private int[] startPos = new int[2];
     private int[] objectivePos = new int[2];
@@ -38,7 +40,7 @@ public class GameManager : MonoBehaviour
         Instantiate(token, Calculator.GetPositionFromMatrix(position),
             Quaternion.identity);
     }
-    private void SetObjectivePoint(int[] startPos) 
+    private void SetObjectivePoint(int[] startPos)
     {
         var rand1 = Random.Range(0, Calculator.length);
         var rand2 = Random.Range(0, Calculator.length);
@@ -63,110 +65,194 @@ public class GameManager : MonoBehaviour
         Debug.Log(matrix);
     }
     //EL VOSTRE EXERCICI COMENÇA AQUI
-    private bool EvaluateWin()
-    {
-        return false;
-    }
 
-    private void Update()
+    public class MyNode
     {
-        if (!EvaluateWin())
+        public int[] position { get; private set; }
+        public MyNode parent { get; set; }
+        public float pathCost { get; set; } // Costo desde el nodo inicial hasta este nodo
+        public float heuristicCost { get; set; } // Costo estimado desde este nodo hasta el nodo objetivo
+
+        public float totalCost { get { return pathCost + heuristicCost; } } // Costo total (suma de GCost y HCost)
+
+        public MyNode(int[] position, MyNode parent, int[] objectivePos)
         {
-            List<Vector2Int> path = FindPath(startPos, objectivePos);
+            this.position = position;
+            this.parent = parent;
+            pathCost = 0.2f;
+            heuristicCost = Calculator.CheckDistanceToObj(position, objectivePos);
         }
+
     }
 
-    private List<Vector2Int> FindPath(int[] startPos, int[] objectivePos)
+    public List<MyNode> OpenList = new List<MyNode>();
+    public List<MyNode> ClosedList = new List<MyNode>();
+    public MyNode initialNode;
+    public MyNode finalNode;
+
+    private void Start()
     {
-        List<Vector2Int> path = new List<Vector2Int>();
+        initialNode = new MyNode(startPos, null, objectivePos);
+        initialNode = new MyNode(objectivePos, null, objectivePos);
 
-        List<Node> openList = new List<Node>();
-        HashSet<Node> closedSet = new HashSet<Node>();
+        DoSomethingUsefulFuckingUlgyBitch();
+    }
 
-        Node startNode = new Node(startPos, null, 1, Calculator.CheckDistanceToObj(startPos, objectivePos));
-        openList.Add(startNode);
+    private bool EvaluateWin(MyNode actualNode)
+    {
+        return actualNode.position == objectivePos;
+    }
+    private void DoSomethingUsefulFuckingUlgyBitch()
+    {
+        CheckFollowingNodes(initialNode);
+    }
 
-        while (openList.Count > 0)
+    private void CheckFollowingNodes(MyNode parent)
+    {
+        MyNode NNode = new MyNode(new int[] { parent.position[0], parent.position[1] - 1 }, parent, objectivePos);
+        MyNode SNode = new MyNode(new int[] { parent.position[0], parent.position[1] + 1 }, parent, objectivePos);
+        MyNode WNode = new MyNode(new int[] { parent.position[0] - 1, parent.position[1] }, parent, objectivePos);
+        MyNode ENode = new MyNode(new int[] { parent.position[0] + 1, parent.position[1] }, parent, objectivePos);
+
+        OpenList.Add(NNode);
+        OpenList.Add(SNode);
+        OpenList.Add(WNode);
+        OpenList.Add(ENode);
+
+        CheckOpenList();
+    }
+
+    private void CheckOpenList()
+    {
+        MyNode bestNode = new MyNode(null, null, null);
+
+        foreach (MyNode node in OpenList)
         {
-            Node currentNode = openList[0];
-            for (int i = 1; i < openList.Count; i++)
+            InstantiateToken(token3, node.position);
+
+            if (bestNode.totalCost > node.totalCost)
             {
-                if (openList[i].totalCost < currentNode.totalCost || (openList[i].totalCost == currentNode.totalCost && openList[i].heuristicCost < currentNode.heuristicCost))
-                {
-                    currentNode = openList[i];
-                }
-            }
-
-            openList.Remove(currentNode);
-            InstantiateToken(token3, currentNode.position);
-
-            closedSet.Add(currentNode);
-            Debug.Log(currentNode);
-            if (currentNode.position[0] == objectivePos[0] && currentNode.position[1] == objectivePos[1])
-            {
-                // Reconstruir el camino
-                while (currentNode != null)
-                {
-                    path.Add(new Vector2Int(currentNode.position[0], currentNode.position[1]));
-                    currentNode = currentNode.parent;
-                }
-                path.Reverse();
-                break;
-            }
-
-            foreach (var neighbor in GetNeighbors(currentNode.position))
-            {
-                if (closedSet.Contains(neighbor))
-                {
-                    continue;
-                }
-
-
-                var neighborPosition = new int[2] { neighbor.position[0], neighbor.position[1] }; 
-
-                float gCost = currentNode.pathCost + Calculator.CheckDistanceToObj(currentNode.position, neighborPosition);
-                float hCost = Calculator.CheckDistanceToObj(neighborPosition, objectivePos);
-                Node neighborNode = new Node(neighborPosition, currentNode, gCost, hCost);
-
-                if (openList.Contains(neighborNode) && gCost >= neighborNode.pathCost)
-                {
-                    continue;
-                }
-
-                openList.Add(neighborNode);
+                bestNode = node;
             }
         }
 
-        return path;
+        OpenList.Remove(bestNode);
+        ClosedList.Add(bestNode);
+
+        if (EvaluateWin(bestNode))
+        {
+            foreach (MyNode node in ClosedList)
+            {
+                InstantiateToken(token4, node.position);
+            }
+            return;
+        } 
+
+        CheckFollowingNodes(bestNode);
     }
 
-    private List<Node> GetNeighbors(int[] currentPosition)
-    {
-        List<Node> neighbors = new List<Node>();
+    //private void Update()
+    //{
+    //    if (!EvaluateWin())
+    //    {
+    //        DoSomethingUsefulFuckingUlgyBitch();
+    //    }
+    //}
 
-        // Implementa la lógica para obtener las posiciones de los vecinos (movimientos permitidos en el ajedrez)
-
-        return neighbors;
-    }
-
-
-
+    //quitar el update
+    //funcion lista abierta 
+    //funcion lista cerrada (heu + cost menor se mete y se quita de abierta)
+    //compruevas win
+    //private MyNode[] AllNodes()
+    //{
+    //    MyNode[] myNodes = new MyNode[10];
+    //    return myNodes;
+    //}
 }
 
-public class Node
-{
-    public int[] position { get; private set; }
-    public Node parent { get; set; }
-    public float pathCost { get; set; } // Costo desde el nodo inicial hasta este nodo
-    public float heuristicCost { get; set; } // Costo estimado desde este nodo hasta el nodo objetivo
 
-    public float totalCost { get { return pathCost + heuristicCost; } } // Costo total (suma de GCost y HCost)
 
-    public Node(int[] position, Node parent, float gCost, float hCost)
-    {
-        this.position = position;
-        this.parent = parent;
-        pathCost = gCost;
-        heuristicCost = hCost;
-    }
-}
+
+
+
+
+
+//    private List<Vector2Int> FindPath(int[] startPos, int[] objectivePos)
+//    {
+//        List<Vector2Int> path = new List<Vector2Int>();
+
+//        List<Node> openList = new List<Node>();
+//        HashSet<Node> closedSet = new HashSet<Node>();
+
+//        Node startNode = new Node(startPos, null, 1, Calculator.CheckDistanceToObj(startPos, objectivePos));
+//        openList.Add(startNode);
+
+//        while (openList.Count > 0)
+//        {
+//            Node currentNode = openList[0];
+//            for (int i = 1; i < openList.Count; i++)
+//            {
+//                if (openList[i].totalCost < currentNode.totalCost || (openList[i].totalCost == currentNode.totalCost && openList[i].heuristicCost < currentNode.heuristicCost))
+//                {
+//                    currentNode = openList[i];
+//                }
+//            }
+
+//            openList.Remove(currentNode);
+//            InstantiateToken(token3, currentNode.position);
+
+//            closedSet.Add(currentNode);
+//            Debug.Log(currentNode);
+//            if (currentNode.position[0] == objectivePos[0] && currentNode.position[1] == objectivePos[1])
+//            {
+//                // Reconstruir el camino
+//                while (currentNode != null)
+//                {
+//                    path.Add(new Vector2Int(currentNode.position[0], currentNode.position[1]));
+//                    currentNode = currentNode.parent;
+//                }
+//                path.Reverse();
+//                break;
+//            }
+
+//            foreach (var neighbor in GetNeighbors(currentNode.position))
+//            {
+//                if (closedSet.Contains(neighbor))
+//                {
+//                    continue;
+//                }
+
+
+//                var neighborPosition = new int[2] { neighbor.position[0], neighbor.position[1] }; 
+
+//                float gCost = currentNode.pathCost + Calculator.CheckDistanceToObj(currentNode.position, neighborPosition);
+//                float hCost = Calculator.CheckDistanceToObj(neighborPosition, objectivePos);
+//                Node neighborNode = new Node(neighborPosition, currentNode, gCost, hCost);
+
+//                if (openList.Contains(neighborNode) && gCost >= neighborNode.pathCost)
+//                {
+//                    continue;
+//                }
+
+//                openList.Add(neighborNode);
+//            }
+//        }
+
+//        return path;
+//    }
+
+//    private List<Node> GetNeighbors(int[] currentPosition)
+//    {
+//        List<Node> neighbors = new List<Node>();
+
+//        // Implementa la lógica para obtener las posiciones de los vecinos (movimientos permitidos en el ajedrez)
+
+//        return neighbors;
+//    }
+
+
+
+//}
+
+
+//}

@@ -1,10 +1,5 @@
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using Unity.VisualScripting;
-using UnityEditor.Experimental.GraphView;
 using UnityEngine;
-using static UnityEngine.RuleTile.TilingRuleOutput;
 
 public class GameManager : MonoBehaviour
 {
@@ -37,8 +32,18 @@ public class GameManager : MonoBehaviour
     }
     private void InstantiateToken(GameObject token, int[] position)
     {
-        Instantiate(token, Calculator.GetPositionFromMatrix(position),
-            Quaternion.identity);
+        if (position[0] >= 0 && position[0] <= 7 && position[1] >= 0 && position[1] <= 7)
+        {
+            var matrixPos = Calculator.GetPositionFromMatrix(position);
+            var zPos = 0f;
+
+            if (token == token4)
+            {
+                zPos = -1f;
+            }
+            Instantiate(token, new Vector3(matrixPos.x, matrixPos.y, zPos),
+                Quaternion.identity);
+        } 
     }
     private void SetObjectivePoint(int[] startPos)
     {
@@ -83,6 +88,16 @@ public class GameManager : MonoBehaviour
             heuristicCost = Calculator.CheckDistanceToObj(position, objectivePos);
         }
 
+        public MyNode(int[] objectivePos) 
+        { 
+            this.position = new int[2] {0, 0};
+            this.parent = null;
+            pathCost = 0.2f;
+            heuristicCost = Calculator.CheckDistanceToObj(position, objectivePos);
+
+        }
+
+
     }
 
     public List<MyNode> OpenList = new List<MyNode>();
@@ -93,14 +108,14 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         initialNode = new MyNode(startPos, null, objectivePos);
-        initialNode = new MyNode(objectivePos, null, objectivePos);
+        finalNode = new MyNode(objectivePos, null, objectivePos);
 
         DoSomethingUsefulFuckingUlgyBitch();
     }
 
     private bool EvaluateWin(MyNode actualNode)
     {
-        return actualNode.position == objectivePos;
+        return actualNode.position[0] == finalNode.position[0] && actualNode.position[1] == finalNode.position[1];
     }
     private void DoSomethingUsefulFuckingUlgyBitch()
     {
@@ -119,12 +134,16 @@ public class GameManager : MonoBehaviour
         OpenList.Add(WNode);
         OpenList.Add(ENode);
 
+        
+
         CheckOpenList();
     }
 
     private void CheckOpenList()
     {
-        MyNode bestNode = new MyNode(null, null, null);
+        MyNode bestNode = initialNode;
+
+        Debug.Log("bestNodeCreated");
 
         foreach (MyNode node in OpenList)
         {
@@ -132,6 +151,7 @@ public class GameManager : MonoBehaviour
 
             if (bestNode.totalCost > node.totalCost)
             {
+                Debug.Log("Found bestNode");
                 bestNode = node;
             }
         }
@@ -139,7 +159,7 @@ public class GameManager : MonoBehaviour
         OpenList.Remove(bestNode);
         ClosedList.Add(bestNode);
 
-        if (EvaluateWin(bestNode))
+        if (EvaluateWin(bestNode) == true)
         {
             foreach (MyNode node in ClosedList)
             {
